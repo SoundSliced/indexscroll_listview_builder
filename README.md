@@ -25,3 +25,7 @@ import 'package:indexscroll_listview_builder/indexscroll_listview_builder.dart';
 ## License
 
 TODO: Add license information
+
+## Repository
+
+https://github.com/SoundSliced/indexscroll_listview_builder
