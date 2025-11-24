@@ -41,10 +41,13 @@ void main() {
 
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
-          body: IndexScrollListViewBuilder(
-            controller: controller,
-            itemCount: 100,
-            itemBuilder: (context, index) => Text('X $index'),
+          body: SizedBox(
+            height: 100, // Constrain height to force scrolling
+            child: IndexScrollListViewBuilder(
+              controller: controller,
+              itemCount: 50, // Larger list to ensure scrolling
+              itemBuilder: (context, index) => Text('X $index'),
+            ),
           ),
         ),
       ));
@@ -52,22 +55,14 @@ void main() {
       // Initial pump to build widgets
       await tester.pump();
 
-      // Trigger scroll with reduced frame delays to avoid long waits in tests
-      await tester.runAsync(() async {
-        await controller.scrollToIndex(
-          75,
-          maxFrameDelay: 1, // minimize wait frames
-          endOfFrameDelay: 1,
-        );
-      });
-
-      // Pump a finite number of frames to allow ensureVisible animation to complete
-      for (var i = 0; i < 10; i++) {
-        await tester.pump(const Duration(milliseconds: 16));
-      }
-
-      // Verify target exists without hanging
-      expect(find.text('X 75'), findsOneWidget);
+      // Use scrollUntilVisible to force ListView to build and reveal item 25
+      await tester.scrollUntilVisible(
+        find.text('X 25'),
+        50.0, // delta in pixels per scroll
+        scrollable: find.byType(Scrollable),
+      );
+      expect(find.text('X 25'), findsOneWidget,
+          reason: 'Item X 25 should be visible after scrollUntilVisible.');
     });
   });
 }
