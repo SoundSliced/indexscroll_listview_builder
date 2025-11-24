@@ -1,5 +1,5 @@
 name: indexscroll_listview_builder
-description: A Flutter package for indexscroll_listview_builder functionality
+description: Enhanced ListView.builder with index-based programmatic scrolling, alignment control, offset handling, and optional customizable scrollbar for Flutter.
 issue_tracker: https://github.com/SoundSliced/indexscroll_listview_builder/issues
 repository: https://github.com/SoundSliced/indexscroll_listview_builder
 version: 1.0.0
