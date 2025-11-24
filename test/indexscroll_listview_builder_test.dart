@@ -49,14 +49,24 @@ void main() {
         ),
       ));
 
+      // Initial pump to build widgets
       await tester.pump();
 
-      // Use runAsync to allow scroll future
+      // Trigger scroll with reduced frame delays to avoid long waits in tests
       await tester.runAsync(() async {
-        await controller.scrollToIndex(75);
+        await controller.scrollToIndex(
+          75,
+          maxFrameDelay: 1, // minimize wait frames
+          endOfFrameDelay: 1,
+        );
       });
 
-      // Ensure some item text is still accessible
+      // Pump a finite number of frames to allow ensureVisible animation to complete
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      // Verify target exists without hanging
       expect(find.text('X 75'), findsOneWidget);
     });
   });
