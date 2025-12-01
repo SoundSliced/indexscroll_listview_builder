@@ -268,6 +268,11 @@ class IndexedScrollController {
               newSafeIndex == lastRegisteredIndex;
 
           // Compute the offset within the inner viewport and animate only this controller
+          // Check if the widget is still mounted before using context
+          if (!newContext.mounted) {
+            return;
+          }
+
           final ro = newContext.findRenderObject();
           final viewport = ro != null ? RenderAbstractViewport.of(ro) : null;
           if (ro != null && viewport != null && _scrollController.hasClients) {
@@ -293,6 +298,11 @@ class IndexedScrollController {
         lastRegisteredIndex != null && safeIndex == lastRegisteredIndex;
 
     // Compute the offset within the inner viewport and animate only this controller
+    // Check if the widget is still mounted before using context
+    if (!context.mounted) {
+      return;
+    }
+
     final ro = context.findRenderObject();
     final viewport = ro != null ? RenderAbstractViewport.of(ro) : null;
     if (ro != null && viewport != null && _scrollController.hasClients) {
