@@ -1,6 +1,6 @@
 ## 2.0.1
 
-* Version 2.0.1
+* Version 2.0.1: README file updated
 
 ## 2.0.0
 

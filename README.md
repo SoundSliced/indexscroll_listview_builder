@@ -26,30 +26,6 @@ Enhanced `ListView.builder` for Flutter with powerful **bidirectional** index-ba
 * **✨ Smooth animations**: Configurable duration and curve
 * **🎬 Frame-delayed execution**: Reduces layout jank during scroll operations
 
-## 🆕 What's New in 2.0.0
-
-### Major Improvements
-
-* ✅ **Fixed bidirectional scrolling**: Now works perfectly scrolling both up and down
-* ✅ **Fixed external controller**: Buttons now scroll the correct ListView (not the outer page)
-* ✅ **Viewport-based implementation**: Precise control using `RenderAbstractViewport.getOffsetToReveal`
-* ✅ **Smart off-screen handling**: Estimates position for items not yet rendered
-* ✅ **Operation cancellation**: Prevents interrupted animations during rapid scrolling
-* ✅ **Performance optimized**: Fast-path index resolution for common cases
-
-### Breaking Change
-
-The `scrollToIndex()` method now requires an `itemCount` parameter:
-
-```dart
-// v1.x
-controller.scrollToIndex(50);
-
-// v2.0.0
-controller.scrollToIndex(50, itemCount: totalItems);
-```
-
-This enables accurate position estimation for off-screen items.
 
 ## 🛠 Installation
 
@@ -57,7 +33,7 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  indexscroll_listview_builder: ^2.0.0
+  indexscroll_listview_builder: ^2.0.1
 ```
 
 Then import:
