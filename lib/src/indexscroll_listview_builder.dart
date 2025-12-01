@@ -319,6 +319,7 @@ class _IndexScrollListViewBuilderState
       alignmentOverride: widget.scrollAlignment,
       maxFrameDelay: widget.autoScrollMaxFrameDelay,
       endOfFrameDelay: widget.autoScrollEndOfFrameDelay,
+      itemCount: widget.itemCount,
     );
   }
 

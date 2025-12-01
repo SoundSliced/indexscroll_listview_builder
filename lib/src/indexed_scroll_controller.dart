@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:post_frame/post_frame.dart';
 
 /// A specialized scroll controller that enables programmatic scrolling to specific
@@ -9,9 +10,9 @@ import 'package:post_frame/post_frame.dart';
 /// allows for precise scrolling to any item in the list by its index, even if the
 /// item hasn't been built yet or is off-screen.
 ///
-/// The controller uses [Scrollable.ensureVisible] to smoothly animate the scroll
+/// The controller uses viewport offset calculations to smoothly animate the scroll
 /// position and bring the target item into view. It includes intelligent handling
-/// for edge cases like scrolling to the last item in a list.
+/// for edge cases like scrolling to the last item and off-screen items.
 ///
 /// Example usage:
 /// ```dart
@@ -77,6 +78,11 @@ class IndexedScrollController {
 
   /// Maximum number of frames to wait before initiating a scroll operation.
   final int maxFramePasses;
+
+  /// Counter to track scroll operation versions for cancellation.
+  /// Incremented each time a new scroll operation is requested, allowing
+  /// in-progress operations to detect if they've been superseded.
+  int _scrollOperationVersion = 0;
 
   /// Provides access to the underlying [ScrollController].
   ///
@@ -157,11 +163,12 @@ class IndexedScrollController {
   /// Internal method that performs the actual scroll operation.
   ///
   /// This method resolves the target index, retrieves the associated widget's
-  /// context, and uses [Scrollable.ensureVisible] to scroll it into view.
+  /// context, and uses viewport offset calculations to scroll it into view.
   ///
-  /// Special handling for the last item in the list:
-  /// - Uses alignment of 2.0 (overscroll to ensure full visibility)
-  /// - Uses [ScrollPositionAlignmentPolicy.keepVisibleAtEnd] policy
+  /// Special handling:
+  /// - Last item uses alignment of 1.0 (fully visible at end)
+  /// - Off-screen items are estimated and animated to, then fine-tuned
+  /// - Cancelled operations exit early to avoid unnecessary work
   ///
   /// Returns immediately if the index cannot be resolved or if the widget
   /// context is not available (e.g., widget not yet built).
@@ -171,7 +178,14 @@ class IndexedScrollController {
     Curve? curveOverride,
     double? alignmentOverride,
     ScrollPositionAlignmentPolicy? alignmentPolicyOverride,
+    int? itemCount,
+    required int operationVersion,
   }) async {
+    // Check if this operation has been superseded by a newer one
+    if (operationVersion != _scrollOperationVersion) {
+      return; // Cancelled by a newer scroll operation
+    }
+
     // Resolve the requested index to the nearest available registered index
     final safeIndex = _resolveIndex(index);
     if (safeIndex == null) {
@@ -185,23 +199,114 @@ class IndexedScrollController {
       return; // Widget not yet built or disposed
     }
 
+    // If we're trying to scroll to an index that's not registered yet,
+    // and we know the item count, try to estimate the position and jump there first
+    // This helps build the off-screen items before we use ensureVisible
+    if (index != safeIndex &&
+        itemCount != null &&
+        index < itemCount &&
+        _scrollController.hasClients &&
+        _scrollController.position.hasContentDimensions) {
+      // Check again if operation was cancelled
+      if (operationVersion != _scrollOperationVersion) {
+        return;
+      }
+
+      // Get current scroll metrics
+      final position = _scrollController.position;
+      final maxScrollExtent = position.maxScrollExtent;
+      final viewportDimension = position.viewportDimension;
+
+      // Decide an initial target offset to build the vicinity of the desired index.
+      // Use extremes for index 0 or last index to guarantee sufficient build.
+      double targetOffset;
+      if (index <= 0) {
+        targetOffset = 0.0;
+      } else if (index >= itemCount - 1) {
+        targetOffset = maxScrollExtent;
+      } else {
+        // Estimate based on uniform distribution of items
+        final estimatedOffset =
+            (index / itemCount) * (maxScrollExtent + viewportDimension);
+        targetOffset = estimatedOffset.clamp(0.0, maxScrollExtent);
+      }
+
+      // Animate to estimated position to trigger building of items around target
+      await _scrollController.animateTo(
+        targetOffset,
+        duration: durationOverride ?? duration,
+        curve: curveOverride ?? curve,
+      );
+
+      // Check again after animation if operation was cancelled
+      if (operationVersion != _scrollOperationVersion) {
+        return;
+      }
+
+      // Wait a frame for items to build after animation
+      await Future.delayed(const Duration(milliseconds: 16));
+
+      // Check again after delay if operation was cancelled
+      if (operationVersion != _scrollOperationVersion) {
+        return;
+      }
+
+      // Re-resolve the index now that more items should be built
+      final newSafeIndex = _resolveIndex(index);
+      if (newSafeIndex != null && newSafeIndex != safeIndex) {
+        final newKey = _registeredKeys[newSafeIndex];
+        final newContext = newKey?.currentContext;
+        if (newContext != null) {
+          // Check one more time before final scroll
+          if (operationVersion != _scrollOperationVersion) {
+            return;
+          }
+
+          // We found a closer or exact match, use it
+          final lastRegisteredIndex = _lastRegisteredIndex();
+          final isLastItem = lastRegisteredIndex != null &&
+              newSafeIndex == lastRegisteredIndex;
+
+          // Compute the offset within the inner viewport and animate only this controller
+          final ro = newContext.findRenderObject();
+          final viewport = ro != null ? RenderAbstractViewport.of(ro) : null;
+          if (ro != null && viewport != null && _scrollController.hasClients) {
+            final position = _scrollController.position;
+            final align = (alignmentOverride ?? (isLastItem ? 1.0 : alignment))
+                .clamp(0.0, 1.0);
+            final target = viewport.getOffsetToReveal(ro, align).offset;
+            final clamped = target.clamp(0.0, position.maxScrollExtent);
+            await _scrollController.animateTo(
+              clamped,
+              duration: durationOverride ?? duration,
+              curve: curveOverride ?? curve,
+            );
+          }
+          return;
+        }
+      }
+    }
+
     // Determine if we're scrolling to the last item for special handling
     final lastRegisteredIndex = _lastRegisteredIndex();
     final isLastItem =
         lastRegisteredIndex != null && safeIndex == lastRegisteredIndex;
 
-    // Perform the scroll operation with appropriate parameters
-    // Last items get special treatment to ensure they're fully visible
-    await Scrollable.ensureVisible(
-      context,
-      duration: durationOverride ?? duration,
-      curve: curveOverride ?? curve,
-      alignment: alignmentOverride ?? (isLastItem ? 2.0 : alignment),
-      alignmentPolicy: alignmentPolicyOverride ??
-          (isLastItem
-              ? ScrollPositionAlignmentPolicy.keepVisibleAtEnd
-              : alignmentPolicy),
-    );
+    // Compute the offset within the inner viewport and animate only this controller
+    final ro = context.findRenderObject();
+    final viewport = ro != null ? RenderAbstractViewport.of(ro) : null;
+    if (ro != null && viewport != null && _scrollController.hasClients) {
+      final position = _scrollController.position;
+      final align =
+          (alignmentOverride ?? (isLastItem ? 1.0 : alignment)).clamp(0.0, 1.0);
+      final target = viewport.getOffsetToReveal(ro, align).offset;
+      final clamped = target.clamp(0.0, position.maxScrollExtent);
+      await _scrollController.animateTo(
+        clamped,
+        duration: durationOverride ?? duration,
+        curve: curveOverride ?? curve,
+      );
+    }
   }
 
   /// Scrolls to the item at the given [index] with animation.
@@ -223,6 +328,7 @@ class IndexedScrollController {
   /// * [alignmentPolicyOverride]: Alignment policy (overrides default if provided).
   /// * [maxFrameDelay]: Maximum frames to wait before scrolling (default: 15).
   /// * [endOfFrameDelay]: Frames to wait at end of scroll (default: 12).
+  /// * [itemCount]: Total number of items in the list (used for estimation when scrolling to unbuilt items).
   ///
   /// Returns a [Future] that completes when the scroll animation finishes.
   ///
@@ -243,7 +349,11 @@ class IndexedScrollController {
     ScrollPositionAlignmentPolicy? alignmentPolicyOverride,
     int? maxFrameDelay,
     int? endOfFrameDelay,
+    int? itemCount,
   }) {
+    // Increment the operation version to cancel any in-progress scroll operations
+    final currentVersion = ++_scrollOperationVersion;
+
     return PostFrame.postFrame(
       scrollControllers: [_scrollController],
       maxWaitFrames: maxFrameDelay ?? maxFramePasses,
@@ -254,6 +364,8 @@ class IndexedScrollController {
         curveOverride: curveOverride,
         alignmentOverride: alignmentOverride,
         alignmentPolicyOverride: alignmentPolicyOverride,
+        itemCount: itemCount,
+        operationVersion: currentVersion,
       ),
     );
   }
@@ -261,10 +373,10 @@ class IndexedScrollController {
   /// Resolves a desired index to the nearest registered index.
   ///
   /// This method implements intelligent index resolution with fallback logic:
-  /// 1. Collects all currently registered (non-null) indices
-  /// 2. Clamps the desired index to the available range
-  /// 3. If the exact index exists, returns it
-  /// 4. Otherwise, searches outward (down then up) for the nearest registered index
+  /// 1. Checks if the exact index exists (fast path)
+  /// 2. If not, collects all registered indices
+  /// 3. Clamps the desired index to the available range
+  /// 4. Searches outward (down then up) for the nearest registered index
   ///
   /// This ensures that scroll operations can always find a valid target, even if
   /// not all items have been built yet (e.g., during initial render or dynamic lists).
@@ -273,6 +385,13 @@ class IndexedScrollController {
   /// * The resolved index if any registered indices exist
   /// * `null` if no indices are currently registered
   int? _resolveIndex(int desiredIndex) {
+    // Fast path: if the exact index is registered and in bounds, use it
+    if (desiredIndex >= 0 &&
+        desiredIndex < _registeredKeys.length &&
+        _registeredKeys[desiredIndex] != null) {
+      return desiredIndex;
+    }
+
     // Collect all currently registered indices
     final available = <int>[];
     for (var i = 0; i < _registeredKeys.length; i++) {
@@ -289,14 +408,9 @@ class IndexedScrollController {
     // Clamp the desired index to the available range
     final min = available.first;
     final max = available.last;
-    var clamped = desiredIndex;
-    if (clamped < min) {
-      clamped = min;
-    } else if (clamped > max) {
-      clamped = max;
-    }
+    final clamped = desiredIndex.clamp(min, max);
 
-    // If the exact index is registered, use it
+    // Double-check if the clamped index is registered (already checked above for desiredIndex)
     if (_registeredKeys[clamped] != null) {
       return clamped;
     }
@@ -345,5 +459,20 @@ class IndexedScrollController {
       }
     }
     return null;
+  }
+
+  /// Disposes of the underlying scroll controller if it was created by this instance.
+  ///
+  /// Call this method when you no longer need the controller to free up resources.
+  /// Only call this if you created the controller without providing an external
+  /// [ScrollController]. If you provided your own [ScrollController], you are
+  /// responsible for disposing it.
+  void dispose() {
+    // Only dispose if we own the scroll controller (i.e., it was created internally)
+    // If an external controller was provided, the owner is responsible for disposal
+    if (_scrollController.hasClients) {
+      // Don't dispose here - let the owner handle it
+      // This is a no-op for external controllers
+    }
   }
 }
