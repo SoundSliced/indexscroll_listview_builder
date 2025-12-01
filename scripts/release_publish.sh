@@ -94,8 +94,38 @@ ensure_pubignore() {
 # Exclude scripts directory from published package
 scripts/
 *.sh
+
+# Exclude build artifacts and cache
+build/
+.dart_tool/
+
+# Exclude web app files (not needed for package)
+web/
+
+# Exclude main.dart from lib root (only example should have main)
+lib/main.dart
+
+# Exclude IDE and metadata files
+.idea/
+*.iml
+.vscode/
+.metadata
+*.swp
+*.swo
+*~
+
+# Exclude test cache
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Exclude example build artifacts
+example/.dart_tool/
+example/build/
+example/.flutter-plugins
+example/.flutter-plugins-dependencies
+example/.metadata
 EOF
-        print_info "Created .pubignore to exclude scripts from published package"
+        print_info "Created .pubignore to exclude scripts and build artifacts from published package"
     else
         # Add scripts/ if not present
         if ! grep -q '^scripts/' "$file"; then
@@ -106,6 +136,66 @@ EOF
         if ! grep -q '^\\.sh' "$file" && ! grep -q '^\\*\\.sh' "$file"; then
             echo "*.sh" >> "$file"
             print_info "Added '*.sh' to .pubignore"
+        fi
+        
+        # Add build artifacts exclusions
+        if ! grep -q '^build/' "$file"; then
+            echo "" >> "$file"
+            echo "# Exclude build artifacts and cache" >> "$file"
+            echo "build/" >> "$file"
+            echo ".dart_tool/" >> "$file"
+            print_info "Added build artifacts exclusions to .pubignore"
+        fi
+        
+        # Add web directory exclusion
+        if ! grep -q '^web/' "$file"; then
+            echo "" >> "$file"
+            echo "# Exclude web app files (not needed for package)" >> "$file"
+            echo "web/" >> "$file"
+            print_info "Added web directory exclusion to .pubignore"
+        fi
+        
+        # Add lib/main.dart exclusion
+        if ! grep -q '^lib/main\.dart' "$file"; then
+            echo "" >> "$file"
+            echo "# Exclude main.dart from lib root (only example should have main)" >> "$file"
+            echo "lib/main.dart" >> "$file"
+            print_info "Added lib/main.dart exclusion to .pubignore"
+        fi
+        
+        # Add IDE and metadata files exclusions
+        if ! grep -q '^\.idea/' "$file"; then
+            echo "" >> "$file"
+            echo "# Exclude IDE and metadata files" >> "$file"
+            echo ".idea/" >> "$file"
+            echo "*.iml" >> "$file"
+            echo ".vscode/" >> "$file"
+            echo ".metadata" >> "$file"
+            echo "*.swp" >> "$file"
+            echo "*.swo" >> "$file"
+            echo "*~" >> "$file"
+            print_info "Added IDE and metadata files exclusions to .pubignore"
+        fi
+        
+        # Add test cache exclusions
+        if ! grep -q '^\.flutter-plugins' "$file"; then
+            echo "" >> "$file"
+            echo "# Exclude test cache" >> "$file"
+            echo ".flutter-plugins" >> "$file"
+            echo ".flutter-plugins-dependencies" >> "$file"
+            print_info "Added test cache exclusions to .pubignore"
+        fi
+        
+        # Add example build artifacts exclusions
+        if ! grep -q '^example/\.dart_tool/' "$file"; then
+            echo "" >> "$file"
+            echo "# Exclude example build artifacts" >> "$file"
+            echo "example/.dart_tool/" >> "$file"
+            echo "example/build/" >> "$file"
+            echo "example/.flutter-plugins" >> "$file"
+            echo "example/.flutter-plugins-dependencies" >> "$file"
+            echo "example/.metadata" >> "$file"
+            print_info "Added example build artifacts exclusions to .pubignore"
         fi
     fi
 }
