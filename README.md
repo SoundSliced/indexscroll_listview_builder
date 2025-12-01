@@ -1,4 +1,3 @@
-````markdown
 # indexscroll_listview_builder
 
 Enhanced `ListView.builder` for Flutter with powerful **bidirectional** index-based programmatic scrolling, precise viewport control, item alignment, offset handling, and optional customizable scrollbar.
