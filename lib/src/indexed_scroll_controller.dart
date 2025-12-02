@@ -178,7 +178,7 @@ class IndexedScrollController {
     Curve? curveOverride,
     double? alignmentOverride,
     ScrollPositionAlignmentPolicy? alignmentPolicyOverride,
-    int? itemCount,
+    required int? itemCount,
     required int operationVersion,
   }) async {
     // Check if this operation has been superseded by a newer one
@@ -359,7 +359,7 @@ class IndexedScrollController {
     ScrollPositionAlignmentPolicy? alignmentPolicyOverride,
     int? maxFrameDelay,
     int? endOfFrameDelay,
-    int? itemCount,
+    required int? itemCount,
   }) {
     // Increment the operation version to cancel any in-progress scroll operations
     final currentVersion = ++_scrollOperationVersion;

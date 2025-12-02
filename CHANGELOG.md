@@ -1,3 +1,7 @@
+## 2.0.2
+
+* IndexedScrollController's scrollToIndex method now requires the itemCount property
+
 ## 2.0.1
 
 * Version 2.0.1: README file updated
