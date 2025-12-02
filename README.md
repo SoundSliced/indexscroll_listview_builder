@@ -33,7 +33,7 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  indexscroll_listview_builder: ^2.0.2
+  indexscroll_listview_builder: ^2.0.3
 ```
 
 Then import:
@@ -64,6 +64,28 @@ IndexScrollListViewBuilder(
     title: Text('Item #$index'),
   ),
 )
+```
+
+### Mixing Declarative and Imperative Scrolling
+
+When using both `indexToScrollTo` (declarative) and `controller.scrollToIndex()` (imperative), you may want to force re-scrolling to the same index:
+
+```dart
+final controller = IndexedScrollController();
+
+IndexScrollListViewBuilder(
+  controller: controller,
+  itemCount: 100,
+  indexToScrollTo: 25,
+  forceAutoScroll: true, // Force scroll even if indexToScrollTo unchanged
+  itemBuilder: (context, index) => ListTile(title: Text('Item #$index')),
+)
+
+// Later, scroll programmatically
+await controller.scrollToIndex(75, itemCount: 100);
+
+// Rebuild with same indexToScrollTo will still scroll back to 25
+setState(() {}); // forceAutoScroll makes this re-scroll to index 25
 ```
 
 ## 🧭 External Controller
@@ -190,6 +212,7 @@ Internal widget that tags each list item for the controller.
 | `itemCount` | `int` | Required | Total number of items in the list |
 | `itemBuilder` | `Widget Function(BuildContext, int)` | Required | Builder function for list items |
 | `indexToScrollTo` | `int?` | `null` | Auto-scroll target index after build |
+| `forceAutoScroll` | `bool` | `false` | Force re-scroll to `indexToScrollTo` even if value unchanged |
 | `controller` | `IndexedScrollController?` | `null` | External controller for programmatic scrolling |
 
 ### Scrolling Behavior
@@ -288,5 +311,8 @@ If this package helps you, Like it on Pub.dev, and add a ⭐ on GitHub. This is 
 
 ### Q: Does this work with dynamic lists that change size?
 **A:** Yes, the registration system automatically handles items being added or removed. The controller maintains a registry that updates as widgets are built/disposed.
+
+### Q: How do I mix declarative (indexToScrollTo) and imperative (controller.scrollToIndex) scrolling?
+**A:** Use the `forceAutoScroll: true` parameter. This forces the list to re-scroll to `indexToScrollTo` on every rebuild, even if the value hasn't changed. This is useful when you programmatically scroll away using the controller but want rebuilds to restore the original scroll position.
 
 ````

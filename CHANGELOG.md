@@ -1,3 +1,20 @@
+ 
+## 2.0.3
+
+### Added
+* **forceAutoScroll parameter**: New `forceAutoScroll` boolean parameter that forces re-scrolling to `indexToScrollTo` even when the value hasn't changed between rebuilds. This is useful when mixing declarative auto-scrolling with imperative controller usage. Defaults to `false` for backward compatibility.
+* Enhanced documentation for `indexToScrollTo` parameter with clear guidance on mixing declarative and imperative scrolling approaches.
+
+### Example
+```dart
+IndexScrollListViewBuilder(
+  itemCount: 100,
+  indexToScrollTo: 25,
+  forceAutoScroll: true, // Force scroll even if indexToScrollTo is unchanged
+  itemBuilder: (context, index) => ListTile(title: Text('Item $index')),
+)
+```
+
 ## 2.0.2
 
 * IndexedScrollController's scrollToIndex method now requires the itemCount property

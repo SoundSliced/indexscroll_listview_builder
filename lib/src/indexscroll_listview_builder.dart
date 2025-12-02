@@ -73,7 +73,26 @@ class IndexScrollListViewBuilder extends StatefulWidget {
   ///
   /// If null, no automatic scrolling occurs. If provided, the list will
   /// animate to show this item after the widget is fully laid out.
+  ///
+  /// **Important**: This parameter triggers scrolling only when its value changes
+  /// between rebuilds. If you use [controller.scrollToIndex()] programmatically
+  /// and then want to scroll back to the same [indexToScrollTo] value, you must
+  /// either:
+  /// 1. Temporarily set [indexToScrollTo] to null, rebuild, then set it back
+  /// 2. Use [controller.scrollToIndex()] exclusively for all scrolling
+  /// 3. Set [forceAutoScroll] to true to bypass change detection
   final int? indexToScrollTo;
+
+  /// When true, forces the list to scroll to [indexToScrollTo] even if
+  /// the value hasn't changed since the last build.
+  ///
+  /// This is useful when mixing declarative auto-scrolling with imperative
+  /// controller usage. For example, if you programmatically scroll away using
+  /// [controller.scrollToIndex()], then rebuild with the same [indexToScrollTo]
+  /// value, setting this to true will force the scroll to happen again.
+  ///
+  /// Defaults to false.
+  final bool forceAutoScroll;
 
   /// The axis along which the list scrolls.
   ///
@@ -201,6 +220,7 @@ class IndexScrollListViewBuilder extends StatefulWidget {
     this.physics,
     this.shrinkWrap,
     this.indexToScrollTo,
+    this.forceAutoScroll = false,
     this.numberOfOffsetedItemsPriorToSelectedItem = 1,
     this.startPadding,
     this.controller,
@@ -353,14 +373,16 @@ class _IndexScrollListViewBuilderState
       initializeAll();
     }
 
-    // Handle index changes - trigger new auto-scroll if target index changed
-    if (oldWidget.indexToScrollTo != widget.indexToScrollTo) {
-      if (widget.indexToScrollTo != null) {
-        setState(() {
-          indexToScrollTo = widget.indexToScrollTo!;
-          _autoScroll();
-        });
-      }
+    // Handle index changes - trigger new auto-scroll if:
+    // 1. Target index changed, OR
+    // 2. forceAutoScroll is true and an index is specified
+    if (widget.indexToScrollTo != null &&
+        (oldWidget.indexToScrollTo != widget.indexToScrollTo ||
+            widget.forceAutoScroll)) {
+      setState(() {
+        indexToScrollTo = widget.indexToScrollTo!;
+        _autoScroll();
+      });
     }
 
     // Handle offset changes - re-initialize to recalculate with new offset
