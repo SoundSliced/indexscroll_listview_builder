@@ -1,19 +1,162 @@
- 
-## 2.0.3
 
-### Added
-* **forceAutoScroll parameter**: New `forceAutoScroll` boolean parameter that forces re-scrolling to `indexToScrollTo` even when the value hasn't changed between rebuilds. This is useful when mixing declarative auto-scrolling with imperative controller usage. Defaults to `false` for backward compatibility.
-* Enhanced documentation for `indexToScrollTo` parameter with clear guidance on mixing declarative and imperative scrolling approaches.
+## 2.2.0
 
-### Example
+### 🎯 Required Callback & API Refinement
+
+#### Added
+* **onScrolledTo callback (required)**: Unified callback that fires for both declarative (`indexToScrollTo`) and imperative (`controller.scrollToIndex()`) scrolls.
+  - Provides confirmation when a scroll operation reaches its target index
+  - Enables parent widgets to stay in sync with scroll state
+  - Required parameter ensures proper state management patterns
+
+#### Enhanced
+* **Intelligent tracking**: Builder now distinguishes between programmatic and declarative scroll operations to prevent unwanted cancellations
+  - When `onScrolledTo` updates `indexToScrollTo` in response to an imperative scroll, the builder won't trigger a redundant declarative scroll
+  - Smoother interaction between imperative control and parent state updates
+
+#### Technical Improvements
+* Post-frame callback deferral for all `onScrolledTo` invocations to prevent setState-during-build errors
+* Smart handling of parent state updates during programmatic scrolls
+* Better coordination between imperative and declarative scroll modes
+
+#### Migration Guide
+
+**All widgets now require the `onScrolledTo` callback:**
+
 ```dart
+// Before (v2.1.0):
 IndexScrollListViewBuilder(
   itemCount: 100,
   indexToScrollTo: 25,
-  forceAutoScroll: true, // Force scroll even if indexToScrollTo is unchanged
+  itemBuilder: (context, index) => ListTile(title: Text('Item $index')),
+)
+
+// After (v2.2.0):
+IndexScrollListViewBuilder(
+  itemCount: 100,
+  indexToScrollTo: 25,
+  onScrolledTo: (index) {
+    // Optional: update your state, log, etc.
+    print('Scrolled to index $index');
+  },
   itemBuilder: (context, index) => ListTile(title: Text('Item $index')),
 )
 ```
+
+**For simple cases where you don't need the callback:**
+```dart
+IndexScrollListViewBuilder(
+  itemCount: 100,
+  onScrolledTo: (_) {}, // No-op callback
+  itemBuilder: (context, index) => ListTile(title: Text('Item $index')),
+)
+```
+
+**For advanced state management:**
+```dart
+class MyWidget extends StatefulWidget {
+  @override
+  State<MyWidget> createState() => _MyWidgetState();
+}
+
+class _MyWidgetState extends State<MyWidget> {
+  int? _currentIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    return IndexScrollListViewBuilder(
+      itemCount: 100,
+      indexToScrollTo: _currentIndex,
+      onScrolledTo: (index) {
+        // Keep state in sync with scroll position
+        if (_currentIndex != index) {
+          setState(() => _currentIndex = index);
+        }
+      },
+      itemBuilder: (context, index) => ListTile(title: Text('Item $index')),
+    );
+  }
+}
+```
+
+### Benefits
+* ✅ Explicit state management: Know exactly when scrolls complete
+* ✅ Better parent-child coordination: Update parent state in response to scrolls
+* ✅ Prevents timing issues: Post-frame callbacks avoid setState-during-build
+* ✅ Flexible: Use for logging, analytics, state updates, or leave as no-op
+
+## 2.1.0
+
+### 🎯 Improved Declarative Scrolling Behavior (Breaking Change)
+
+#### Changed
+* **indexToScrollTo behavior**: Now acts as a **declarative "home position"** that always takes effect on rebuild, regardless of imperative scrolling via `controller.scrollToIndex()`.
+  - **Before (v2.0.x)**: `indexToScrollTo` only scrolled when the value changed between rebuilds
+  - **After (v2.1.0)**: `indexToScrollTo` scrolls on every rebuild when non-null, overriding imperative scrolls
+  - This provides more intuitive, Flutter-idiomatic declarative behavior
+
+#### Removed
+* **forceAutoScroll parameter**: No longer needed with the new behavior. The old `forceAutoScroll: true` behavior is now the default when `indexToScrollTo` is non-null.
+
+#### Migration Guide
+
+**Case 1: You want declarative positioning (recommended)**
+```dart
+// ✅ No changes needed - new behavior is more intuitive
+IndexScrollListViewBuilder(
+  indexToScrollTo: selectedIndex, // Always restores this position on rebuild
+  itemCount: 100,
+  itemBuilder: (context, index) => ListTile(title: Text('Item $index')),
+)
+```
+
+**Case 2: You want imperative scrolling to persist across rebuilds**
+```dart
+// Before (v2.0.x):
+IndexScrollListViewBuilder(
+  indexToScrollTo: 25, // Stayed at 25 after initial scroll
+  controller: controller,
+  // ...
+)
+
+// After (v2.1.0):
+IndexScrollListViewBuilder(
+  indexToScrollTo: null, // Set to null to let controller scrolling persist
+  controller: controller,
+  // ...
+)
+// Now controller.scrollToIndex() persists across rebuilds
+```
+
+**Case 3: You were using forceAutoScroll**
+```dart
+// Before (v2.0.3):
+IndexScrollListViewBuilder(
+  indexToScrollTo: 25,
+  forceAutoScroll: true, // Forced re-scroll on rebuild
+  // ...
+)
+
+// After (v2.1.0):
+IndexScrollListViewBuilder(
+  indexToScrollTo: 25, // Now always scrolls on rebuild by default
+  // forceAutoScroll removed - no longer needed
+  // ...
+)
+```
+
+### Benefits
+* ✅ More intuitive: `indexToScrollTo` behaves as expected declarative state
+* ✅ Cleaner API: One less parameter to understand
+* ✅ Better Flutter patterns: Matches how `value` works in TextField and similar widgets
+* ✅ Simpler mental model: Declarative always wins, imperative requires `null`
+
+## 2.0.3
+
+**Note**: Version 2.0.3 was deprecated in favor of the improved 2.1.0 design.
+
+### Added
+* **forceAutoScroll parameter** (deprecated): Temporarily added, then removed in v2.1.0 in favor of better default behavior.
 
 ## 2.0.2
 

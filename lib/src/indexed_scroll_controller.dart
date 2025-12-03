@@ -46,12 +46,12 @@ class IndexedScrollController {
   /// * [maxFramePasses]: Maximum number of frames to wait before scrolling (default: 15).
   IndexedScrollController({
     ScrollController? scrollController,
-    this.duration = const Duration(milliseconds: 400),
+    this.duration = const Duration(milliseconds: 500),
     this.curve = Curves.easeOut,
     this.alignment = 0.2,
     this.alignmentPolicy = ScrollPositionAlignmentPolicy.keepVisibleAtStart,
-    this.endOfFramePasses = 12,
-    this.maxFramePasses = 15,
+    this.endOfFramePasses = 6,
+    this.maxFramePasses = 12,
   }) : _scrollController = scrollController ?? ScrollController();
 
   /// The underlying scroll controller used for actual scrolling operations.
@@ -78,6 +78,10 @@ class IndexedScrollController {
 
   /// Maximum number of frames to wait before initiating a scroll operation.
   final int maxFramePasses;
+
+  /// Notifies listeners when a programmatic scroll is requested via [scrollToIndex].
+  /// Emits the desired target index (before resolution) so consumers can react.
+  final ValueNotifier<int?> programmaticScrollIndex = ValueNotifier<int?>(null);
 
   /// Counter to track scroll operation versions for cancellation.
   /// Incremented each time a new scroll operation is requested, allowing
@@ -361,6 +365,9 @@ class IndexedScrollController {
     int? endOfFrameDelay,
     required int? itemCount,
   }) {
+    // Emit programmatic scroll intent for listeners (e.g., widget callbacks)
+    programmaticScrollIndex.value = index;
+
     // Increment the operation version to cancel any in-progress scroll operations
     final currentVersion = ++_scrollOperationVersion;
 
@@ -478,6 +485,7 @@ class IndexedScrollController {
   /// [ScrollController]. If you provided your own [ScrollController], you are
   /// responsible for disposing it.
   void dispose() {
+    programmaticScrollIndex.dispose();
     // Only dispose if we own the scroll controller (i.e., it was created internally)
     // If an external controller was provided, the owner is responsible for disposal
     if (_scrollController.hasClients) {

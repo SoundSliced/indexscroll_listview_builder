@@ -16,7 +16,9 @@ Enhanced `ListView.builder` for Flutter with powerful **bidirectional** index-ba
 * **🎯 Bidirectional scrolling**: Scroll to any item by index - works perfectly both up and down the list
 * **🚀 Viewport-based precision**: Direct viewport offset calculations for accurate positioning
 * **⚡ Off-screen item support**: Scroll to items not yet rendered with smart position estimation
-* **🎮 Automatic initial scroll**: Navigate to target index on widget build via `indexToScrollTo`
+* **🎮 Declarative & imperative modes**: Use `indexToScrollTo` for declarative positioning or controller for imperative control
+* **🔔 Scroll completion callback**: Required `onScrolledTo` callback confirms when scrolling completes
+* **🧠 Intelligent tracking**: Coordinates between declarative and imperative scrolling to prevent conflicts (v2.2.0)
 * **📍 Offset support**: Keep items before the target visible (`numberOfOffsetedItemsPriorToSelectedItem`)
 * **🎨 Customizable alignment**: Position target item anywhere in viewport with `scrollAlignment` (0.0–1.0)
 * **🕹️ External controller**: Advanced programmatic control with `IndexedScrollController`
@@ -33,7 +35,7 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  indexscroll_listview_builder: ^2.0.3
+  indexscroll_listview_builder: ^2.2.0
 ```
 
 Then import:
@@ -47,6 +49,7 @@ import 'package:indexscroll_listview_builder/indexscroll_listview_builder.dart';
 ```dart
 IndexScrollListViewBuilder(
   itemCount: 100,
+  onScrolledTo: (index) {}, // Required callback
   itemBuilder: (context, index) => ListTile(title: Text('Item #$index')),
 )
 ```
@@ -60,32 +63,59 @@ IndexScrollListViewBuilder(
   itemCount: 50,
   indexToScrollTo: 25, // scroll after first frame
   numberOfOffsetedItemsPriorToSelectedItem: 2, // keep previous 2 items visible
+  onScrolledTo: (index) => print('Scrolled to $index'),
   itemBuilder: (context, index) => ListTile(
     title: Text('Item #$index'),
   ),
 )
 ```
 
-### Mixing Declarative and Imperative Scrolling
+### Declarative vs Imperative Scrolling
 
-When using both `indexToScrollTo` (declarative) and `controller.scrollToIndex()` (imperative), you may want to force re-scrolling to the same index:
+**Declarative Positioning** (indexToScrollTo acts as "home position"):
+
+When `indexToScrollTo` is non-null, it acts as a declarative "home position". In v2.2.0, the widget uses intelligent tracking to coordinate between declarative and imperative scrolling:
 
 ```dart
 final controller = IndexedScrollController();
 
 IndexScrollListViewBuilder(
-  controller: controller,
   itemCount: 100,
-  indexToScrollTo: 25,
-  forceAutoScroll: true, // Force scroll even if indexToScrollTo unchanged
+  indexToScrollTo: selectedIndex, // Declarative: sets target position
+  controller: controller,
+  onScrolledTo: (index) {
+    // Update parent state when scroll completes
+    if (selectedIndex != index) {
+      setState(() => selectedIndex = index);
+    }
+  },
   itemBuilder: (context, index) => ListTile(title: Text('Item #$index')),
 )
 
-// Later, scroll programmatically
+// Later, when you imperatively scroll and update indexToScrollTo in onScrolledTo,
+// the widget won't trigger a redundant declarative scroll
 await controller.scrollToIndex(75, itemCount: 100);
+// The onScrolledTo callback updates selectedIndex to 75, coordinating smoothly
+```
 
-// Rebuild with same indexToScrollTo will still scroll back to 25
-setState(() {}); // forceAutoScroll makes this re-scroll to index 25
+**Imperative Positioning** (controller scrolling persists):
+
+Set `indexToScrollTo` to `null` for pure imperative control where controller scrolling persists across rebuilds:
+
+```dart
+final controller = IndexedScrollController();
+
+IndexScrollListViewBuilder(
+  itemCount: 100,
+  indexToScrollTo: null, // Pure imperative: no declarative home position
+  controller: controller,
+  onScrolledTo: (index) => print('Scrolled to $index'),
+  itemBuilder: (context, index) => ListTile(title: Text('Item #$index')),
+)
+
+// Controller scrolling persists across rebuilds since indexToScrollTo is null
+await controller.scrollToIndex(75, itemCount: 100);
+setState(() {}); // Stays at index 75 (no declarative override)
 ```
 
 ## 🧭 External Controller
@@ -99,6 +129,7 @@ final itemCount = 100;
 IndexScrollListViewBuilder(
   controller: controller,
   itemCount: itemCount,
+  onScrolledTo: (index) {}, // Required
   itemBuilder: (context, index) => ListTile(title: Text('Item #$index')),
 );
 
@@ -121,6 +152,7 @@ IndexScrollListViewBuilder(
   scrollbarThumbVisibility: true,
   scrollbarThickness: 8,
   scrollbarRadius: const Radius.circular(8),
+  onScrolledTo: (_) {},
   itemBuilder: (context, index) => ListTile(title: Text('Item #$index')),
 )
 ```
@@ -148,6 +180,7 @@ IndexScrollListViewBuilder(
   numberOfOffsetedItemsPriorToSelectedItem: 3, // Shows items 48, 49, 50
   scrollAlignment: 0.0, // Items 48-50 appear at top
   itemCount: 100,
+  onScrolledTo: (_) {},
   itemBuilder: (context, index) => ListTile(title: Text('Item $index')),
 )
 ```
@@ -184,9 +217,9 @@ Primary widget that extends `ListView.builder` with index-based scrolling capabi
 Core controller that powers the scrolling mechanism.
 
 **Key Methods:**
-- `scrollToIndex(int index, {required int itemCount, double? alignmentOverride})` - Scroll to specific index
-- `register(int index, GlobalKey key)` - Register an item (called internally)
-- `unregister(int index)` - Unregister an item (called internally)
+- `scrollToIndex(int index, {Duration? duration, Curve? curveOverride, double? alignmentOverride, ScrollPositionAlignmentPolicy? alignmentPolicyOverride, int? maxFrameDelay, int? endOfFrameDelay, required int? itemCount})` - Scroll to specific index with optional customization
+- `registerKey({required int index, required GlobalKey key})` - Register an item (called internally)
+- `unregisterKey(GlobalKey key)` - Unregister an item (called internally)
 
 **Features:**
 - Maintains registry of `GlobalKey`s for each list item
@@ -211,8 +244,8 @@ Internal widget that tags each list item for the controller.
 |-----------|------|---------|-------------|
 | `itemCount` | `int` | Required | Total number of items in the list |
 | `itemBuilder` | `Widget Function(BuildContext, int)` | Required | Builder function for list items |
-| `indexToScrollTo` | `int?` | `null` | Auto-scroll target index after build |
-| `forceAutoScroll` | `bool` | `false` | Force re-scroll to `indexToScrollTo` even if value unchanged |
+| `onScrolledTo` | `void Function(int)` | Required | Callback invoked when list scrolls to an index (declarative or imperative) |
+| `indexToScrollTo` | `int?` | `null` | Declarative "home position" - scrolls here on every rebuild when non-null |
 | `controller` | `IndexedScrollController?` | `null` | External controller for programmatic scrolling |
 
 ### Scrolling Behavior
@@ -313,6 +346,6 @@ If this package helps you, Like it on Pub.dev, and add a ⭐ on GitHub. This is 
 **A:** Yes, the registration system automatically handles items being added or removed. The controller maintains a registry that updates as widgets are built/disposed.
 
 ### Q: How do I mix declarative (indexToScrollTo) and imperative (controller.scrollToIndex) scrolling?
-**A:** Use the `forceAutoScroll: true` parameter. This forces the list to re-scroll to `indexToScrollTo` on every rebuild, even if the value hasn't changed. This is useful when you programmatically scroll away using the controller but want rebuilds to restore the original scroll position.
+**A:** Version 2.2.0 introduces intelligent tracking that coordinates between both modes. When you use imperative scrolling and update `indexToScrollTo` in the `onScrolledTo` callback, the widget recognizes this and won't trigger a redundant declarative scroll. This allows smooth interaction between imperative controls and parent state management. For pure imperative control where scrolling persists across rebuilds, set `indexToScrollTo: null`.
 
 ````

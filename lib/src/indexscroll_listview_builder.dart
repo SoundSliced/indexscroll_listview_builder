@@ -68,31 +68,45 @@ class IndexScrollListViewBuilder extends StatefulWidget {
   /// representing that item.
   final Widget Function(BuildContext, int) itemBuilder;
 
-  /// Optional index to automatically scroll to when the widget is first built
-  /// or when this value changes.
+  /// Optional index to automatically scroll to when the widget rebuilds.
   ///
-  /// If null, no automatic scrolling occurs. If provided, the list will
-  /// animate to show this item after the widget is fully laid out.
+  /// This parameter acts as a **declarative "home position"** for the list.
+  /// When specified, the list will automatically scroll to this index on every
+  /// rebuild, even if you've scrolled away using [controller.scrollToIndex()].
   ///
-  /// **Important**: This parameter triggers scrolling only when its value changes
-  /// between rebuilds. If you use [controller.scrollToIndex()] programmatically
-  /// and then want to scroll back to the same [indexToScrollTo] value, you must
-  /// either:
-  /// 1. Temporarily set [indexToScrollTo] to null, rebuild, then set it back
-  /// 2. Use [controller.scrollToIndex()] exclusively for all scrolling
-  /// 3. Set [forceAutoScroll] to true to bypass change detection
+  /// **Behavior**:
+  /// - When `null`: No automatic scrolling occurs. The list stays at its current
+  ///   scroll position, and imperative scrolling via controller persists across rebuilds.
+  /// - When set to an index: The list will scroll to this index on every rebuild,
+  ///   overriding any imperative scrolling done via the controller.
+  ///
+  /// **Use cases**:
+  /// - **Declarative positioning**: Keep the list at a specific position that's
+  ///   tied to your app state (e.g., currently selected item).
+  /// - **Mixed scrolling**: Use imperative scrolling temporarily (e.g., preview),
+  ///   then let rebuilds restore the declarative position.
+  /// - **Pure imperative control**: Set to `null` to let controller scrolling
+  ///   persist across rebuilds.
+  ///
+  /// Example:
+  /// ```dart
+  /// // Declarative: list always shows the selected item
+  /// IndexScrollListViewBuilder(
+  ///   indexToScrollTo: selectedIndex, // Rebuilds restore this position
+  ///   itemCount: 100,
+  ///   itemBuilder: (context, index) => ListTile(title: Text('Item $index')),
+  /// )
+  ///
+  /// // Imperative: controller scrolling persists
+  /// IndexScrollListViewBuilder(
+  ///   indexToScrollTo: null, // No automatic positioning
+  ///   controller: myController,
+  ///   itemCount: 100,
+  ///   itemBuilder: (context, index) => ListTile(title: Text('Item $index')),
+  /// )
+  /// // myController.scrollToIndex(50) will persist across rebuilds
+  /// ```
   final int? indexToScrollTo;
-
-  /// When true, forces the list to scroll to [indexToScrollTo] even if
-  /// the value hasn't changed since the last build.
-  ///
-  /// This is useful when mixing declarative auto-scrolling with imperative
-  /// controller usage. For example, if you programmatically scroll away using
-  /// [controller.scrollToIndex()], then rebuild with the same [indexToScrollTo]
-  /// value, setting this to true will force the scroll to happen again.
-  ///
-  /// Defaults to false.
-  final bool forceAutoScroll;
 
   /// The axis along which the list scrolls.
   ///
@@ -144,6 +158,15 @@ class IndexScrollListViewBuilder extends StatefulWidget {
   /// list from outside the widget. If null, an internal controller is created
   /// and managed automatically.
   final IndexedScrollController? controller;
+
+  /// Unified callback invoked whenever the list scrolls to an index
+  /// as a result of either declarative `indexToScrollTo` or a programmatic
+  /// `controller.scrollToIndex(...)`.
+  ///
+  /// Use this to confirm that a requested index was reached and optionally
+  /// update your declarative state (e.g., set `indexToScrollTo` to the new
+  /// index or to `null` to switch to imperative persistence).
+  final void Function(int index) onScrolledTo;
 
   /// Duration of the scroll animation.
   ///
@@ -220,10 +243,10 @@ class IndexScrollListViewBuilder extends StatefulWidget {
     this.physics,
     this.shrinkWrap,
     this.indexToScrollTo,
-    this.forceAutoScroll = false,
     this.numberOfOffsetedItemsPriorToSelectedItem = 1,
     this.startPadding,
     this.controller,
+    required this.onScrolledTo,
     this.scrollAnimationDuration = const Duration(milliseconds: 400),
     this.scrollAlignment,
     this.padding,
@@ -265,6 +288,10 @@ class _IndexScrollListViewBuilderState
   /// Current offset value, clamped to valid range based on item count.
   late int numberOfOffsetedItemsPriorToSelectedItem;
 
+  /// Flag to track if we're currently handling a programmatic scroll.
+  /// When true, prevents declarative scroll from cancelling the imperative one.
+  bool _isHandlingProgrammaticScroll = false;
+
   @override
   void initState() {
     super.initState();
@@ -274,6 +301,9 @@ class _IndexScrollListViewBuilderState
       // Use the externally provided controller
       _scrollController = widget.controller!;
       _ownsController = false;
+      // Subscribe to programmatic scroll events and forward to callback
+      _scrollController.programmaticScrollIndex
+          .addListener(_handleProgrammaticScroll);
     } else {
       // Create and manage our own controller
       _scrollController = IndexedScrollController(
@@ -287,6 +317,26 @@ class _IndexScrollListViewBuilderState
 
     // Initialize state variables and trigger initial auto-scroll if needed
     initializeAll();
+  }
+
+  void _handleProgrammaticScroll() {
+    final idx = _scrollController.programmaticScrollIndex.value;
+    if (idx != null) {
+      // Mark that we're handling a programmatic scroll
+      _isHandlingProgrammaticScroll = true;
+      // Defer callback to post-frame to avoid setState during build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          widget.onScrolledTo(idx);
+          // Reset flag after a short delay to allow user's setState to complete
+          Future.delayed(const Duration(milliseconds: 50), () {
+            if (mounted) {
+              _isHandlingProgrammaticScroll = false;
+            }
+          });
+        }
+      });
+    }
   }
 
   /// Initializes or re-initializes state variables and triggers auto-scroll if needed.
@@ -341,6 +391,16 @@ class _IndexScrollListViewBuilderState
       endOfFrameDelay: widget.autoScrollEndOfFrameDelay,
       itemCount: widget.itemCount,
     );
+    // Inform parent that a declarative scroll was initiated to the target index
+    // Note: we report the requested indexToScrollTo, not the offset-adjusted `ind`.
+    // Defer to post-frame to avoid setState during build.
+    if (indexToScrollTo != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          widget.onScrolledTo(indexToScrollTo!);
+        }
+      });
+    }
   }
 
   @override
@@ -358,6 +418,8 @@ class _IndexScrollListViewBuilderState
       // Switch to the new external controller
       _scrollController = widget.controller!;
       _ownsController = false;
+      _scrollController.programmaticScrollIndex
+          .addListener(_handleProgrammaticScroll);
       initializeAll();
     }
     // Case 2: External controller removed, need to create our own
@@ -370,19 +432,32 @@ class _IndexScrollListViewBuilderState
         curve: Curves.easeOut,
       );
       _ownsController = true;
+      // No external controller, ensure listener is not attached
       initializeAll();
     }
 
-    // Handle index changes - trigger new auto-scroll if:
-    // 1. Target index changed, OR
-    // 2. forceAutoScroll is true and an index is specified
+    // Handle declarative scroll target:
+    // If indexToScrollTo is non-null, always honor it (acts as "home position")
+    // This means rebuilds will restore the declarative position, even if
+    // the user scrolled away imperatively via controller.scrollToIndex()
+    // UNLESS we're currently handling a programmatic scroll - in that case,
+    // the user is updating indexToScrollTo in response to the imperative scroll,
+    // so we should NOT trigger another scroll (which would cancel the current one).
     if (widget.indexToScrollTo != null &&
-        (oldWidget.indexToScrollTo != widget.indexToScrollTo ||
-            widget.forceAutoScroll)) {
-      setState(() {
+        widget.indexToScrollTo != indexToScrollTo) {
+      // Skip if we're handling a programmatic scroll and the new value matches
+      // what we're scrolling to (user is following the imperative scroll)
+      final skipBecauseProgrammatic = _isHandlingProgrammaticScroll;
+
+      if (!skipBecauseProgrammatic) {
+        setState(() {
+          indexToScrollTo = widget.indexToScrollTo!;
+          _autoScroll();
+        });
+      } else {
+        // Just update the target without scrolling
         indexToScrollTo = widget.indexToScrollTo!;
-        _autoScroll();
-      });
+      }
     }
 
     // Handle offset changes - re-initialize to recalculate with new offset
@@ -400,6 +475,11 @@ class _IndexScrollListViewBuilderState
     // External controllers are managed by their owner, not by us
     if (_ownsController) {
       _scrollController.controller.dispose();
+    }
+    // Detach listener from external controller if present
+    if (!_ownsController) {
+      _scrollController.programmaticScrollIndex
+          .removeListener(_handleProgrammaticScroll);
     }
 
     super.dispose();
