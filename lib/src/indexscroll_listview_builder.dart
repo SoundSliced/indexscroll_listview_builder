@@ -459,6 +459,23 @@ class _IndexScrollListViewBuilderState
         indexToScrollTo = widget.indexToScrollTo!;
       }
     }
+    // NEW: If indexToScrollTo hasn't changed BUT we have an external controller
+    // and its last programmatic scroll position differs from the declarative target,
+    // then restore to the declarative position (rebuild triggered but user didn't
+    // update indexToScrollTo in onScrolledTo callback).
+    else if (widget.indexToScrollTo != null &&
+        !_ownsController &&
+        _scrollController.programmaticScrollIndex.value != null &&
+        _scrollController.programmaticScrollIndex.value !=
+            widget.indexToScrollTo &&
+        !_isHandlingProgrammaticScroll) {
+      // Mismatch detected: controller scrolled to one index, but declarative
+      // target is different. Restore to declarative position.
+      setState(() {
+        indexToScrollTo = widget.indexToScrollTo!;
+        _autoScroll();
+      });
+    }
 
     // Handle offset changes - re-initialize to recalculate with new offset
     if (oldWidget.numberOfOffsetedItemsPriorToSelectedItem !=

@@ -8,7 +8,6 @@ import 'basic_example_card.dart';
 import 'declarative_scroll_card.dart';
 import 'imperative_scroll_card.dart';
 import 'declarative_test_card.dart';
-import 'imperative_test_card.dart';
 
 void main() {
   // Entry point for the demo app.
@@ -231,11 +230,6 @@ class _ExampleHomePageState extends State<ExampleHomePage> {
                       globalCount: _globalCount,
                     );
 
-                    // Card 5: Imperative behavior demo (indexToScrollTo: null)
-                    final Widget imperativeTestCard = ImperativeTestCard(
-                      globalCount: _globalCount,
-                    );
-
                     // Render cards in a responsive wrap.
                     return Wrap(
                       spacing: 12,
@@ -245,7 +239,6 @@ class _ExampleHomePageState extends State<ExampleHomePage> {
                         SizedBox(width: cardWidth, child: autoCard),
                         SizedBox(width: cardWidth, child: externalCard),
                         SizedBox(width: cardWidth, child: declarativeTestCard),
-                        SizedBox(width: cardWidth, child: imperativeTestCard),
                       ],
                     );
                   }),
@@ -272,7 +265,7 @@ class _ExampleHomePageState extends State<ExampleHomePage> {
                             size: 32, color: colorScheme.primary),
                         const SizedBox(height: 12),
                         Text(
-                          'Feature Showcase - v2.1.0',
+                          'Feature Showcase - v2.2.0',
                           style:
                               Theme.of(context).textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
@@ -284,8 +277,8 @@ class _ExampleHomePageState extends State<ExampleHomePage> {
                           '• Basic list building and scrollbar customization\n'
                           '• Declarative scrolling with alignment and offset control\n'
                           '• Imperative scrolling with external controller\n'
-                          '• NEW v2.1.0: Declarative Test - shows how indexToScrollTo acts as a "home position"\n'
-                          '• NEW v2.1.0: Imperative Test - demonstrates persistence with null indexToScrollTo',
+                          '• NEW v2.2.0: Declarative Test - shows how indexToScrollTo acts as a "home position - therefore if not updated within onScrolledTo callback when controller triggered scrolls are made, on rebuild it will still be the same position"\n'
+                          '• NEW v2.2.0: Imperative Test - demonstrates persistence with null indexToScrollTo',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),

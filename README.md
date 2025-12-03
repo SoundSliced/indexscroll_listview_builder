@@ -9,7 +9,7 @@ Enhanced `ListView.builder` for Flutter with powerful **bidirectional** index-ba
 
 ![IndexScroll ListView Builder Demo](https://raw.githubusercontent.com/SoundSliced/indexscroll_listview_builder/main/example/assets/example.gif)
 
-*Interactive demonstration showing bidirectional scrolling, auto-scroll with alignment control, and external controller buttons*
+*Interactive demonstration showing bidirectional scrolling, auto-scroll with alignment control, and external controller buttons, declarative and imperative autoscrolls, declarative vs imperative autoscrolls*
 
 ## ✨ Features
 
@@ -19,6 +19,7 @@ Enhanced `ListView.builder` for Flutter with powerful **bidirectional** index-ba
 * **🎮 Declarative & imperative modes**: Use `indexToScrollTo` for declarative positioning or controller for imperative control
 * **🔔 Scroll completion callback**: Required `onScrolledTo` callback confirms when scrolling completes
 * **🧠 Intelligent tracking**: Coordinates between declarative and imperative scrolling to prevent conflicts (v2.2.0)
+* **🔄 Auto-restore on rebuild**: Automatically detects mismatches and restores to declarative home position when not updated in callback (v2.2.0)
 * **📍 Offset support**: Keep items before the target visible (`numberOfOffsetedItemsPriorToSelectedItem`)
 * **🎨 Customizable alignment**: Position target item anywhere in viewport with `scrollAlignment` (0.0–1.0)
 * **🕹️ External controller**: Advanced programmatic control with `IndexedScrollController`
@@ -74,8 +75,9 @@ IndexScrollListViewBuilder(
 
 **Declarative Positioning** (indexToScrollTo acts as "home position"):
 
-When `indexToScrollTo` is non-null, it acts as a declarative "home position". In v2.2.0, the widget uses intelligent tracking to coordinate between declarative and imperative scrolling:
+When `indexToScrollTo` is non-null, it acts as a declarative "home position". In v2.2.0, the widget intelligently handles two scenarios:
 
+**Scenario 1 - Coordinated Mode (Update indexToScrollTo in callback):**
 ```dart
 final controller = IndexedScrollController();
 
@@ -92,10 +94,34 @@ IndexScrollListViewBuilder(
   itemBuilder: (context, index) => ListTile(title: Text('Item #$index')),
 )
 
-// Later, when you imperatively scroll and update indexToScrollTo in onScrolledTo,
+// When you imperatively scroll and update indexToScrollTo in onScrolledTo,
 // the widget won't trigger a redundant declarative scroll
 await controller.scrollToIndex(75, itemCount: 100);
-// The onScrolledTo callback updates selectedIndex to 75, coordinating smoothly
+// onScrolledTo updates selectedIndex to 75 → coordinated smoothly
+```
+
+**Scenario 2 - Auto-Restore Mode (Don't update indexToScrollTo in callback):**
+```dart
+final controller = IndexedScrollController();
+int homePosition = 15;
+
+IndexScrollListViewBuilder(
+  itemCount: 100,
+  indexToScrollTo: homePosition, // Fixed home position
+  controller: controller,
+  onScrolledTo: (index) {
+    // DON'T update homePosition here - keep it fixed at 15
+    print('Scrolled to $index');
+  },
+  itemBuilder: (context, index) => ListTile(title: Text('Item #$index')),
+)
+
+// Imperatively scroll to a different position
+await controller.scrollToIndex(75, itemCount: 100);
+// List scrolls to 75, but homePosition stays at 15
+
+// Later, when a rebuild occurs (e.g., setState from parent):
+setState(() {}); // ← Widget auto-detects mismatch and restores to position 15!
 ```
 
 **Imperative Positioning** (controller scrolling persists):
@@ -346,6 +372,12 @@ If this package helps you, Like it on Pub.dev, and add a ⭐ on GitHub. This is 
 **A:** Yes, the registration system automatically handles items being added or removed. The controller maintains a registry that updates as widgets are built/disposed.
 
 ### Q: How do I mix declarative (indexToScrollTo) and imperative (controller.scrollToIndex) scrolling?
-**A:** Version 2.2.0 introduces intelligent tracking that coordinates between both modes. When you use imperative scrolling and update `indexToScrollTo` in the `onScrolledTo` callback, the widget recognizes this and won't trigger a redundant declarative scroll. This allows smooth interaction between imperative controls and parent state management. For pure imperative control where scrolling persists across rebuilds, set `indexToScrollTo: null`.
+**A:** Version 2.2.0 introduces intelligent tracking with two modes:
+
+1. **Coordinated Mode**: Update `indexToScrollTo` in the `onScrolledTo` callback. The widget recognizes this and won't trigger redundant scrolls, allowing smooth coordination between imperative controls and parent state.
+
+2. **Auto-Restore Mode**: DON'T update `indexToScrollTo` in the callback. The widget automatically detects when a rebuild occurs and the controller's position differs from the declarative target, then auto-restores to the home position. Perfect for temporary imperative scrolls that should return to a fixed position on rebuild.
+
+For pure imperative control where scrolling persists indefinitely across rebuilds, set `indexToScrollTo: null`.
 
 ````

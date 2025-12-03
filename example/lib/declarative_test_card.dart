@@ -15,6 +15,7 @@ class _DeclarativeTestCardState extends State<DeclarativeTestCard> {
   final IndexedScrollController _controller = IndexedScrollController();
   int? _declarativeIndex = 15;
   String _status = 'Ready to test';
+  bool _updateIndexInCallback = true; // Toggle for coordinated behavior
 
   @override
   void didUpdateWidget(DeclarativeTestCard oldWidget) {
@@ -97,16 +98,26 @@ class _DeclarativeTestCardState extends State<DeclarativeTestCard> {
                 indexToScrollTo:
                     _declarativeIndex, // Declarative index position
                 onScrolledTo: (idx) {
-                  // Always update the declarative index to follow any scroll.
-                  // IndexScrollListViewBuilder intelligently prevents this from
-                  // cancelling imperative scrolls.
+                  // Conditional behavior based on toggle:
+                  // When _updateIndexInCallback is true, we update _declarativeIndex
+                  // to coordinate with imperative scrolls (v2.2.0 intelligent tracking).
+                  // When false, we DON'T update it, so declarative home position
+                  // will restore on rebuild.
+                  if (!_updateIndexInCallback) {
+                    setState(() {
+                      _status =
+                          'Scrolled to $idx — NOT updating home (will restore on rebuild)';
+                    });
+                    return;
+                  }
+
                   if (_declarativeIndex == null || _declarativeIndex == idx) {
                     // No change or in imperative mode; skip redundant setState.
                     return;
                   }
                   setState(() {
                     _declarativeIndex = idx;
-                    _status = 'Scrolled to $idx — index updated';
+                    _status = 'Scrolled to $idx — home updated (coordinated)';
                   });
                 },
                 itemBuilder: (context, index) => Container(
@@ -164,6 +175,73 @@ class _DeclarativeTestCardState extends State<DeclarativeTestCard> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Toggle for update behavior
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _updateIndexInCallback
+                        ? Colors.green.withValues(alpha: 0.1)
+                        : Colors.orange.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _updateIndexInCallback
+                          ? Colors.green.withValues(alpha: 0.3)
+                          : Colors.orange.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _updateIndexInCallback
+                            ? Icons.sync
+                            : Icons.restore_rounded,
+                        size: 20,
+                        color: _updateIndexInCallback
+                            ? Colors.green
+                            : Colors.orange,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _updateIndexInCallback
+                                  ? 'Coordinated Mode (v2.2.0)'
+                                  : 'Declarative Restore Mode',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: _updateIndexInCallback
+                                    ? Colors.green
+                                    : Colors.orange,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _updateIndexInCallback
+                                  ? 'Updates indexToScrollTo in onScrolledTo → imperative scrolls persist on rebuild'
+                                  : 'Does NOT update indexToScrollTo → declarative home restores on rebuild',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: _updateIndexInCallback,
+                        onChanged: (value) => setState(() {
+                          _updateIndexInCallback = value;
+                          _status = value
+                              ? 'Mode: Coordinated (updates home)'
+                              : 'Mode: Restore (keeps home fixed)';
+                        }),
+                        activeThumbColor: Colors.green,
+                        inactiveThumbColor: Colors.orange,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
                 _buildSliderControl(
                   context,
                   icon: Icons.home,
@@ -186,9 +264,6 @@ class _DeclarativeTestCardState extends State<DeclarativeTestCard> {
                     // Imperative scroll to index 40
                     FilledButton.tonalIcon(
                       onPressed: () async {
-                        // Simply scroll imperatively.
-                        // The onScrolledTo callback will update _declarativeIndex,
-                        // and the widget intelligently prevents scroll cancellation.
                         setState(() {
                           _status = 'Scrolling to 40 (imperative)...';
                         });
@@ -196,16 +271,29 @@ class _DeclarativeTestCardState extends State<DeclarativeTestCard> {
                           40,
                           itemCount: widget.globalCount,
                         );
-                        setState(() {
-                          _status =
-                              'At 40 — index auto-updated via onScrolledTo';
-                        });
+                        // Status is updated in onScrolledTo callback
                       },
                       icon: const Icon(Icons.arrow_forward, size: 18),
                       label: const Text('Scroll to 40'),
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.teal.withValues(alpha: 0.1),
                         foregroundColor: Colors.teal,
+                      ),
+                    ),
+                    // Trigger rebuild button
+                    FilledButton.tonalIcon(
+                      onPressed: () {
+                        setState(() {
+                          _status = _updateIndexInCallback
+                              ? 'Rebuild triggered — stays at current position'
+                              : 'Rebuild triggered — IndexScrollListViewBuilder auto-restores to home ${_declarativeIndex ?? 15}';
+                        });
+                      },
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('Trigger Rebuild'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.purple.withValues(alpha: 0.1),
+                        foregroundColor: Colors.purple,
                       ),
                     ),
                   ],
