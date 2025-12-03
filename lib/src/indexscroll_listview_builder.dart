@@ -292,6 +292,11 @@ class _IndexScrollListViewBuilderState
   /// When true, prevents declarative scroll from cancelling the imperative one.
   bool _isHandlingProgrammaticScroll = false;
 
+  /// Tracks whether we've had at least one rebuild since the last programmatic scroll.
+  /// Used to distinguish between immediate rebuilds (from onScrolledTo) and subsequent
+  /// external rebuilds (from user actions like clicking a button).
+  bool _hasRebuiltSinceProgrammaticScroll = false;
+
   @override
   void initState() {
     super.initState();
@@ -324,6 +329,8 @@ class _IndexScrollListViewBuilderState
     if (idx != null) {
       // Mark that we're handling a programmatic scroll
       _isHandlingProgrammaticScroll = true;
+      // Reset the rebuild tracker - we haven't rebuilt since this new scroll
+      _hasRebuiltSinceProgrammaticScroll = false;
       // Defer callback to post-frame to avoid setState during build
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -332,6 +339,9 @@ class _IndexScrollListViewBuilderState
           Future.delayed(const Duration(milliseconds: 50), () {
             if (mounted) {
               _isHandlingProgrammaticScroll = false;
+              // Mark that the programmatic scroll sequence is complete and ready
+              // for auto-restore detection on the next rebuild
+              _hasRebuiltSinceProgrammaticScroll = true;
             }
           });
         }
@@ -459,18 +469,28 @@ class _IndexScrollListViewBuilderState
         indexToScrollTo = widget.indexToScrollTo!;
       }
     }
-    // NEW: If indexToScrollTo hasn't changed BUT we have an external controller
-    // and its last programmatic scroll position differs from the declarative target,
-    // then restore to the declarative position (rebuild triggered but user didn't
-    // update indexToScrollTo in onScrolledTo callback).
+    // NEW: Auto-restore logic - only triggers when ALL these conditions are met:
+    // 1. indexToScrollTo is non-null (declarative mode active)
+    // 2. We have an external controller (user provided one)
+    // 3. Controller's last scroll differs from declarative target (mismatch exists)
+    // 4. We're NOT currently handling a programmatic scroll (not in the middle of one)
+    // 5. We've had at least one rebuild since the programmatic scroll
+    //    (ensures the immediate rebuild from onScrolledTo doesn't trigger auto-restore)
+    //
+    // This ensures we only auto-restore on truly "external" rebuilds (like user
+    // clicking a button that calls setState), not on the immediate rebuild that
+    // happens as part of the programmatic scroll's onScrolledTo callback.
     else if (widget.indexToScrollTo != null &&
         !_ownsController &&
         _scrollController.programmaticScrollIndex.value != null &&
         _scrollController.programmaticScrollIndex.value !=
             widget.indexToScrollTo &&
-        !_isHandlingProgrammaticScroll) {
-      // Mismatch detected: controller scrolled to one index, but declarative
-      // target is different. Restore to declarative position.
+        !_isHandlingProgrammaticScroll &&
+        _hasRebuiltSinceProgrammaticScroll) {
+      // Mismatch detected: controller scrolled to one index, declarative target
+      // is different, and we've already had the first rebuild after that scroll.
+      // This is a subsequent "external" rebuild.
+      // User didn't update indexToScrollTo in callback → auto-restore to home position.
       setState(() {
         indexToScrollTo = widget.indexToScrollTo!;
         _autoScroll();

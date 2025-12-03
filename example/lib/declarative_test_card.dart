@@ -14,6 +14,7 @@ class DeclarativeTestCard extends StatefulWidget {
 class _DeclarativeTestCardState extends State<DeclarativeTestCard> {
   final IndexedScrollController _controller = IndexedScrollController();
   int? _declarativeIndex = 15;
+  int? _currentScrollPosition; // Track where controller actually scrolled to
   String _status = 'Ready to test';
   bool _updateIndexInCallback = true; // Toggle for coordinated behavior
 
@@ -98,6 +99,9 @@ class _DeclarativeTestCardState extends State<DeclarativeTestCard> {
                 indexToScrollTo:
                     _declarativeIndex, // Declarative index position
                 onScrolledTo: (idx) {
+                  // Always track the current scroll position for visual feedback
+                  _currentScrollPosition = idx;
+
                   // Conditional behavior based on toggle:
                   // When _updateIndexInCallback is true, we update _declarativeIndex
                   // to coordinate with imperative scrolls (v2.2.0 intelligent tracking).
@@ -113,6 +117,10 @@ class _DeclarativeTestCardState extends State<DeclarativeTestCard> {
 
                   if (_declarativeIndex == null || _declarativeIndex == idx) {
                     // No change or in imperative mode; skip redundant setState.
+                    // But still update to show current position visually
+                    setState(() {
+                      _status = 'At position $idx';
+                    });
                     return;
                   }
                   setState(() {
@@ -120,54 +128,75 @@ class _DeclarativeTestCardState extends State<DeclarativeTestCard> {
                     _status = 'Scrolled to $idx — home updated (coordinated)';
                   });
                 },
-                itemBuilder: (context, index) => Container(
-                  margin:
-                      const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: index == _declarativeIndex
-                        ? Colors.teal.withValues(alpha: 0.2)
-                        : colorScheme.surface,
-                    borderRadius: BorderRadius.circular(8),
-                    border: index == _declarativeIndex
-                        ? Border.all(color: Colors.teal, width: 2)
-                        : null,
-                    boxShadow: [
-                      BoxShadow(
-                        color: colorScheme.shadow.withValues(alpha: 0.05),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: ListTile(
-                    dense: true,
-                    leading: index == _declarativeIndex
-                        ? const Icon(Icons.home, color: Colors.teal)
-                        : Text('$index', style: const TextStyle(fontSize: 12)),
-                    title: Text('Item #$index',
-                        style: TextStyle(
-                          fontWeight: index == _declarativeIndex
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        )),
-                    trailing: index == _declarativeIndex
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.teal,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text('TARGET',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                )),
-                          )
-                        : null,
-                  ),
-                ),
+                itemBuilder: (context, index) {
+                  final isHome = index == _declarativeIndex;
+                  final isCurrentPosition = index == _currentScrollPosition;
+                  final isBoth = isHome && isCurrentPosition;
+
+                  // Determine colors based on state
+                  Color backgroundColor;
+                  Color? borderColor;
+                  double borderWidth = 0;
+
+                  if (isBoth) {
+                    // Both home and current position - teal
+                    backgroundColor = Colors.teal.withValues(alpha: 0.2);
+                    borderColor = Colors.teal;
+                    borderWidth = 2;
+                  } else if (isHome) {
+                    // Home position only - teal with dashed style
+                    backgroundColor = Colors.teal.withValues(alpha: 0.1);
+                    borderColor = Colors.teal;
+                    borderWidth = 2;
+                  } else if (isCurrentPosition) {
+                    // Current scroll position only - purple
+                    backgroundColor = Colors.purple.withValues(alpha: 0.15);
+                    borderColor = Colors.purple;
+                    borderWidth = 2;
+                  } else {
+                    backgroundColor = colorScheme.surface;
+                  }
+
+                  return Container(
+                    margin:
+                        const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: backgroundColor,
+                      borderRadius: BorderRadius.circular(8),
+                      border: borderColor != null
+                          ? Border.all(color: borderColor, width: borderWidth)
+                          : null,
+                      boxShadow: [
+                        BoxShadow(
+                          color: colorScheme.shadow.withValues(alpha: 0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: ListTile(
+                      dense: true,
+                      leading: isBoth
+                          ? const Icon(Icons.home, color: Colors.teal)
+                          : isHome
+                              ? const Icon(Icons.home_outlined,
+                                  color: Colors.teal)
+                              : isCurrentPosition
+                                  ? const Icon(Icons.location_on,
+                                      color: Colors.purple)
+                                  : Text('$index',
+                                      style: const TextStyle(fontSize: 12)),
+                      title: Text('Item #$index',
+                          style: TextStyle(
+                            fontWeight: (isHome || isCurrentPosition)
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          )),
+                      trailing:
+                          _buildTrailing(isHome, isCurrentPosition, isBoth),
+                    ),
+                  );
+                },
               ),
             ),
             const SizedBox(height: 16),
@@ -261,20 +290,25 @@ class _DeclarativeTestCardState extends State<DeclarativeTestCard> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    // Imperative scroll to index 40
+                    // Imperative scroll to random index
                     FilledButton.tonalIcon(
                       onPressed: () async {
+                        // Generate random index in valid range
+                        final randomIndex = 20 +
+                            (DateTime.now().millisecondsSinceEpoch %
+                                    (widget.globalCount - 20))
+                                .toInt();
                         setState(() {
-                          _status = 'Scrolling to 40 (imperative)...';
+                          _status = 'Scrolling to $randomIndex (imperative)...';
                         });
                         await _controller.scrollToIndex(
-                          40,
+                          randomIndex,
                           itemCount: widget.globalCount,
                         );
                         // Status is updated in onScrolledTo callback
                       },
                       icon: const Icon(Icons.arrow_forward, size: 18),
-                      label: const Text('Scroll to 40'),
+                      label: const Text('Scroll Random'),
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.teal.withValues(alpha: 0.1),
                         foregroundColor: Colors.teal,
@@ -326,6 +360,41 @@ class _DeclarativeTestCardState extends State<DeclarativeTestCard> {
         ),
       ),
     );
+  }
+
+  Widget? _buildTrailing(bool isHome, bool isCurrentPosition, bool isBoth) {
+    if (isHome) {
+      // Home position (shown whether current position matches or not)
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.teal,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Text('HOME',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            )),
+      );
+    } else if (isCurrentPosition) {
+      // Current scroll position only (when different from home)
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.purple,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Text('CONTROLLER INDEX',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            )),
+      );
+    }
+    return null;
   }
 
   Widget _buildSliderControl(

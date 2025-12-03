@@ -15,15 +15,17 @@
   - Smoother interaction between imperative control and parent state updates
 * **Auto-restore on rebuild**: Automatically detects position mismatches and restores to declarative home position
   - When `indexToScrollTo` is not updated in `onScrolledTo` callback after imperative scrolls
-  - Widget detects mismatch between controller's last position and declarative target on rebuild
+  - After programmatic scroll completes (50ms after onScrolledTo fires), widget marks scroll as complete
+  - On next rebuild, widget detects mismatch between controller's position and declarative target
   - Automatically scrolls back to the declarative "home position"
-  - Perfect for temporary imperative scrolls that should return to a fixed position
+  - Perfect for temporary imperative scrolls that should return to a fixed position on rebuild
 
 #### Technical Improvements
 * Post-frame callback deferral for all `onScrolledTo` invocations to prevent setState-during-build errors
-* Smart handling of parent state updates during programmatic scrolls
+* Smart handling of parent state updates during programmatic scrolls with 50ms completion delay
 * Better coordination between imperative and declarative scroll modes
 * Mismatch detection in `didUpdateWidget` for auto-restore functionality
+* Tracking flags distinguish between programmatic scroll sequences and external rebuilds
 
 #### Migration Guide
 
@@ -160,6 +162,7 @@ class _MyWidgetState extends State<MyWidget> {
 * ✅ Prevents timing issues: Post-frame callbacks avoid setState-during-build
 * ✅ Flexible: Use for logging, analytics, state updates, or leave as no-op
 * ✅ Auto-restore: Declarative home position automatically restores when not updated in callback
+* ✅ Enhanced example app: Visual badges show **HOME** (declarative position) vs **CONTROLLER INDEX** (imperative position) for clear understanding
 
 ## 2.1.0
 
