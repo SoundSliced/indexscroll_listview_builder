@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:indexscroll_listview_builder/indexscroll_listview_builder.dart';
 
 /// Declarative scroll example - scrolls on build/rebuild.

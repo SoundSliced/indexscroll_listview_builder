@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+
 import 'package:indexscroll_listview_builder/indexscroll_listview_builder.dart';
 
 /// Basic usage example without auto-scrolling or external control.
