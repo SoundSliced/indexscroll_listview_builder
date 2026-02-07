@@ -36,7 +36,7 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  indexscroll_listview_builder: ^2.2.0
+  indexscroll_listview_builder: ^3.0.0
 ```
 
 Then import:

@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:indexscroll_listview_builder/indexscroll_listview_builder.dart';
 
 /// Declarative behavior test - demonstrates indexToScrollTo as "home position".

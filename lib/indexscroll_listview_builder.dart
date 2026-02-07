@@ -48,6 +48,4 @@
 ///  * [IndexedScrollTag], internal widget that tags each item for scrolling
 library;
 
-export 'src/indexscroll_listview_builder.dart';
-export 'src/indexed_scroll_controller.dart';
-export 'src/indexed_scroll_child.dart';
+export 'package:s_packages/s_packages.dart';
